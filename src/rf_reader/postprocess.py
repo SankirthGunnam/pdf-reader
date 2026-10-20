@@ -49,19 +49,53 @@ def _body_order(doc: dict) -> list[str]:
     walk(doc.get("body", {}))
     return order
 
+def _page_source(pdf_path: Path, page_no: int, cache: dict) -> dict:
+    """Classify a page: vector/native (resolution-independent drawing +
+    text objects) vs raster (a scanned/photo image XObject). Cached."""
+    key = ("src", page_no)
+    if key in cache:
+        return cache[key]
+    info = {"kind": "unknown", "native_text_chars": 0, "vector_paths": 0, "raster_px": []}
+    try:
+        if "pdf" not in cache:
+            import pypdfium2 as pdfium
+            cache["pdf"] = pdfium.PdfDocument(str(pdf_path))
+        page = cache["pdf"][page_no - 1]
+        w_pt, _ = page.get_size()
+        info["native_text_chars"] = page.get_textpage().count_chars()
+        for o in page.get_objects():
+            if o.type == 2:
+                info["vector_paths"] += 1
+            elif o.type == 3:
+                try:
+                    b = o.get_bitmap()
+                    dpi = b.width / (w_pt / 72)  # if it spanned full page width
+                    info["raster_px"].append({"width": b.width, "height": b.height, "full_width_dpi_est": round(dpi)})
+                except Exception:
+                    pass
+        info["kind"] = "vector" if (info["vector_paths"] > 20 or info["native_text_chars"] > 200) else (
+            "raster" if info["raster_px"] else "vector")
+        if info["raster_px"] and info["vector_paths"] > 20:
+            info["kind"] = "mixed"
+    except Exception:
+        pass
+    cache[key] = info
+    return info
+
 def _recrop(pdf_path: Path, page_no: int, bbox: dict, scale: float, cache: dict):
     """Render PDF page at `scale`x and crop bbox (BOTTOMLEFT, PDF points)."""
     import pypdfium2 as pdfium
     if "pdf" not in cache:
         cache["pdf"] = pdfium.PdfDocument(str(pdf_path))
-        cache["pages"] = {}
+    cache.setdefault("pages", {})
     pdf = cache["pdf"]
-    if page_no not in cache["pages"]:
+    key = (page_no, round(scale, 2))
+    if key not in cache["pages"]:
         page = pdf[page_no - 1]
         w_pt, h_pt = page.get_size()
         bitmap = page.render(scale=scale)
-        cache["pages"][page_no] = (bitmap.to_pil(), w_pt, h_pt)
-    pil, w_pt, h_pt = cache["pages"][page_no]
+        cache["pages"][key] = (bitmap.to_pil(), w_pt, h_pt)
+    pil, w_pt, h_pt = cache["pages"][key]
     x0 = int(bbox["l"] * scale); x1 = int(bbox["r"] * scale)
     y0 = int((h_pt - bbox["t"]) * scale); y1 = int((h_pt - bbox["b"]) * scale)
     x0, y0 = max(0, x0), max(0, y0)
@@ -71,7 +105,8 @@ def _recrop(pdf_path: Path, page_no: int, bbox: dict, scale: float, cache: dict)
     return pil.crop((x0, y0, x1, y1))
 
 def postprocess(docling_json: Path, pdf: Path | None = None,
-                scale: float = 3.0, min_size: int = 48) -> dict:
+                scale: float = 3.0, min_size: int = 48,
+                target_px: int = 1400, max_scale: float = 6.0) -> dict:
     """Transform docling_json in place (backup -> docling_raw.json).
     Returns manifest dict. Idempotent: skips pictures already linked."""
     docling_json = Path(docling_json)
@@ -131,28 +166,41 @@ def postprocess(docling_json: Path, pdf: Path | None = None,
         orig_size = img.get("size") or {}
         method = "already-linked"
 
+        # Adaptive resolution: aim for `target_px` on the long edge
+        # (what vision LLMs actually consume, ~1024-1568 px), clamped to
+        # [scale, max_scale]. Small/decorative images stay at base scale.
+        chosen, src_info = scale, {}
+        bbox = prov.get("bbox") or {}
+        if bbox:
+            long_pt = max(bbox.get("r", 0) - bbox.get("l", 0), bbox.get("t", 0) - bbox.get("b", 0))
+            if long_pt >= min_size and target_px:
+                chosen = min(max_scale, max(scale, target_px / max(long_pt, 1)))
         if uri.startswith("data:"):
             data = base64.b64decode(uri.split(",", 1)[1])
             new_img, method = None, "upscale-lanczos"
             if pdf is not None and prov.get("bbox"):
                 try:
-                    new_img = _recrop(Path(pdf), page, prov["bbox"], scale, cache)
-                    method = f"recrop-pdf-{int(72 * scale)}dpi" if new_img else method
+                    src_info = _page_source(Path(pdf), page, cache)
+                    if src_info.get("kind") == "raster" and src_info.get("raster_px"):
+                        cap = max(r["full_width_dpi_est"] for r in src_info["raster_px"]) / 72
+                        chosen = min(chosen, max(1.0, cap))  # cannot invent scan detail
+                    new_img = _recrop(Path(pdf), page, prov["bbox"], chosen, cache)
+                    method = f"recrop-pdf-{int(72 * chosen)}dpi" if new_img else method
                 except Exception as e:  # fall through to upscale
                     print(f"  recrop failed pic{i} ({e}); falling back to upscale")
             if new_img is None:
                 from PIL import Image
                 src = Image.open(io.BytesIO(data))
-                if scale != 1.0:
+                if chosen != 1.0:
                     new_img = src.resize(
-                        (max(1, int(src.width * scale)), max(1, int(src.height * scale))),
+                        (max(1, int(src.width * chosen)), max(1, int(src.height * chosen))),
                         Image.LANCZOS)
                 else:
                     new_img = src
             new_img.save(dest)
             img["uri"] = f"images/{fname}"
             img["mimetype"] = "image/png"
-            img["dpi"] = int(72 * scale) if method.startswith("recrop") else img.get("dpi", 72)
+            img["dpi"] = int(72 * chosen) if method.startswith("recrop") else img.get("dpi", 72)
             img["size"] = {"width": float(new_img.width), "height": float(new_img.height)}
 
         prev_t, next_t = context_for(f"#/pictures/{i}")
@@ -164,6 +212,8 @@ def postprocess(docling_json: Path, pdf: Path | None = None,
             "caption": caption, "bbox": prov.get("bbox"),
             "original_size": old.get("original_size", orig_size), "size": img.get("size"),
             "method": old.get("method", method), "likely_decorative": bool(small),
+            "render_scale": old.get("render_scale", round(chosen, 2) if method.startswith("recrop") else None),
+            "page_source": old.get("page_source", src_info),
             "context_before": prev_t, "context_after": next_t,
         }
         manifest.append(entry)

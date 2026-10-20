@@ -76,11 +76,16 @@ docling_raw.json   original Docling output (base64 embedded) — backup/audit
 docling.json       same, but pictures[].image.uri = "images/<file>" (link only),
                    dpi/size updated. No base64 anywhere.
 docling.md         same, but <!-- image --> -> ![caption](images/<file>)
-images/*.png       pictures re-cropped from the source PDF at ~216 dpi
-                   (--scale 2/3/4; without the PDF, Lanczos upscale fallback).
+images/*.png       pictures re-cropped from the source PDF at adaptive
+                   resolution: long edge -> ~1400 px (what vision LLMs
+                   consume), scale clamped [3, 6] = 216-432 dpi; without
+                   the PDF, Lanczos upscale fallback (no new detail).
                    Filenames: p<page>_pic<idx>_<caption-slug>.png
 images/manifest.json  per image: page, caption, bbox, orig/new size, method,
+                   render_scale, page_source (vector/raster/mixed — raster
+                   pages are capped at their native scan dpi), 
                    likely_decorative (logos), prev/next text context.
+                   Re-do at other settings: postprocess.py --from-raw ...
 ```
 
 Feed your LLM: `docling.md` for text/tables, plus for each relevant
