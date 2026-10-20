@@ -12,7 +12,8 @@ This module, given the *source PDF* (best) or only the JSON:
      but bigger/sharper for VLM input resizing).
   3. Rewrites pictures[].image.uri -> "images/<file>" (link only, same
      JSON schema) and updates dpi/size to the new image. Raw base64 is
-     removed. Original JSON is preserved as docling_raw.json.
+     removed; the pre-postprocess docling_raw.json duplicate is deleted
+     on success (re-run convert.py to redo).
   4. Writes images/manifest.json: file, page, caption, bbox, original and
      new size, method, size-filter flag, and prev/next text context from
      document (body) order — everything an LLM prompt-builder needs.
@@ -107,17 +108,17 @@ def _recrop(pdf_path: Path, page_no: int, bbox: dict, scale: float, cache: dict)
 def postprocess(docling_json: Path, pdf: Path | None = None,
                 scale: float = 3.0, min_size: int = 48,
                 target_px: int = 1400, max_scale: float = 6.0) -> dict:
-    """Transform docling_json in place (backup -> docling_raw.json).
-    Returns manifest dict. Idempotent: skips pictures already linked."""
+    """Transform docling_json in place: base64 -> linked image files.
+    Returns manifest dict. Idempotent: skips pictures already linked.
+    On success the pre-postprocess raw JSON (docling_raw.json, if a
+    previous version left one) is deleted — it only duplicates the
+    linked JSON + images. To redo at other settings, re-run convert.py."""
     docling_json = Path(docling_json)
     out_dir = docling_json.parent
     img_dir = out_dir / "images"
     img_dir.mkdir(exist_ok=True)
 
-    raw = out_dir / "docling_raw.json"
     orig_bytes = docling_json.read_bytes()
-    if not raw.exists():
-        raw.write_bytes(orig_bytes)
     doc = json.loads(orig_bytes)
 
     order = _body_order(doc)
@@ -238,5 +239,11 @@ def postprocess(docling_json: Path, pdf: Path | None = None,
                 return "<!-- image -->"
             return f"![{caption or 'figure'}](images/{fname})"
         md_path.write_text(re.sub(r"<!-- image -->", repl, md))
+
+    # Success: linked JSON + MD + images + manifest are complete, so the
+    # raw base64 JSON is a pure duplicate. Remove it (and any stale one
+    # left by older versions). Held only in memory until this point, so
+    # a failure above leaves the input untouched.
+    (out_dir / "docling_raw.json").unlink(missing_ok=True)
 
     return {"images": manifest, "out_dir": str(out_dir)}

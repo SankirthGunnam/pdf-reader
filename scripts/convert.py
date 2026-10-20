@@ -29,7 +29,7 @@ def main(pdf: str, do_ocr: bool = True, post: bool = True, scale: float = 3.0) -
         from rf_reader.postprocess import postprocess
         r = postprocess(out / "docling.json", Path(pdf), scale=scale)
         print(f"Post-processed: {len(r['images'])} images -> {out}/images/ "
-              f"(docling.json now links only, original in docling_raw.json)")
+              f"(docling.json links only, no base64 kept)")
 
 if __name__ == "__main__":
     import argparse

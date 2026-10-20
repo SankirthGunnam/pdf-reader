@@ -68,7 +68,6 @@ standalone: `scripts/postprocess.py`). Docling's embedded base64 pictures are
 extracted so a local LLM gets clean text + real image files:
 
 ```
-docling_raw.json   original Docling output (base64 embedded) — backup/audit
 docling.json       same, but pictures[].image.uri = "images/<file>" (link only),
                    dpi/size updated. No base64 anywhere.
 docling.md         same, but <!-- image --> -> ![caption](images/<file>)
@@ -81,7 +80,7 @@ images/manifest.json  per image: page, caption, bbox, orig/new size, method,
                    render_scale, page_source (vector/raster/mixed — raster
                    pages are capped at their native scan dpi), 
                    likely_decorative (logos), prev/next text context.
-                   Re-do at other settings: postprocess.py --from-raw ...
+                   Re-do at other settings: re-run convert.py.
 ```
 
 Feed your LLM: `docling.md` for text/tables, plus for each relevant
