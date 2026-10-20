@@ -65,6 +65,27 @@ optional local VLM (e.g. Granite-Docling, extra ~1 GB) only for
 block/pin diagrams. **Always human-review `rf_config.json` before using
 it to drive hardware — a wrong switch/PA state can damage the front-end.**
 
+## Output structure (per datasheet, in `output/<part>/`)
+
+`convert.py` runs post-processing automatically (disable: `--no-postprocess`,
+standalone: `scripts/postprocess.py`). Docling's embedded base64 pictures are
+extracted so a local LLM gets clean text + real image files:
+
+```
+docling_raw.json   original Docling output (base64 embedded) — backup/audit
+docling.json       same, but pictures[].image.uri = "images/<file>" (link only),
+                   dpi/size updated. No base64 anywhere.
+docling.md         same, but <!-- image --> -> ![caption](images/<file>)
+images/*.png       pictures re-cropped from the source PDF at ~216 dpi
+                   (--scale 2/3/4; without the PDF, Lanczos upscale fallback).
+                   Filenames: p<page>_pic<idx>_<caption-slug>.png
+images/manifest.json  per image: page, caption, bbox, orig/new size, method,
+                   likely_decorative (logos), prev/next text context.
+```
+
+Feed your LLM: `docling.md` for text/tables, plus for each relevant
+`manifest.json` entry the PNG + `caption` + `context_before/after`.
+
 ## Layout
 
 | Path | Purpose |

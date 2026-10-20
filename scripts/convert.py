@@ -7,7 +7,7 @@ from pathlib import Path
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 ROOT = Path(__file__).resolve().parents[1]
 
-def main(pdf: str, do_ocr: bool = True) -> None:
+def main(pdf: str, do_ocr: bool = True, post: bool = True, scale: float = 3.0) -> None:
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -24,9 +24,19 @@ def main(pdf: str, do_ocr: bool = True) -> None:
     doc.save_as_json(out / "docling.json")
     doc.save_as_markdown(out / "docling.md")
     print(f"Wrote {out}/docling.json + docling.md")
+    if post:  # extract base64 pictures -> images/, link in JSON/MD, hi-res re-crop
+        sys.path.insert(0, str(ROOT / "src"))
+        from rf_reader.postprocess import postprocess
+        r = postprocess(out / "docling.json", Path(pdf), scale=scale)
+        print(f"Post-processed: {len(r['images'])} images -> {out}/images/ "
+              f"(docling.json now links only, original in docling_raw.json)")
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 1:
-        sys.exit("usage: convert.py [--no-ocr] <file.pdf>")
-    main(args[0], do_ocr="--no-ocr" not in sys.argv)
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("pdf")
+    ap.add_argument("--no-ocr", action="store_true", help="faster for native-text PDFs")
+    ap.add_argument("--no-postprocess", action="store_true", help="keep base64 embedded in docling.json")
+    ap.add_argument("--scale", type=float, default=3.0, help="image re-crop scale (3 = ~216 dpi)")
+    a = ap.parse_args()
+    main(a.pdf, do_ocr=not a.no_ocr, post=not a.no_postprocess, scale=a.scale)
