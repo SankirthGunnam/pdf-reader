@@ -25,3 +25,22 @@ PM_TRIG@0x1C, PRODUCT_ID@0x1D (=0x45), MANUFACTURER_ID@0x1E, MAN_USID@0x1F (USID
 
 i.e. to route ANT->TRX3: MIPI RFFE Reg0 write (USID=0xB) data 0x0E.
 Values verified by hand against the datasheet bit table. Still `needs_review: true`.
+
+## Update 2026-10-20 (evening): second RFFE device — Infineon BGSX44MU18
+
+23 pages, `--no-ocr`, 8m23s. Docling: 326 texts, 22 tables, 36 pictures ->
+post-processed images (7 captioned figures, 5 decorative flagged, 0 base64).
+
+Extracted cleanly in docling.md:
+- Table 15-17 register mapping (0x00-0x03 SWITCH_CTRL_RF_A1..A4, 0x1C PM_TRIG,
+  0x1D PRODUCT_ID=0xE8, 0x1E MAN_ID=0x1A, 0x1F MAN_USID, 0x20-0x2E ext/trigger)
+- Table 18 truth table: per-port register, D0=RF_B1 D1=RF_B2 D2=RF_B3 D3=RF_B4
+  (1=connect, 0=isolate) — e.g. RF_A1->RF_B3 = Reg 0x00 bits `xxxx0100`
+- Table 14 USID: USID_SEL=GND -> 0xA, =VIO -> 0xB (pin-selectable)
+- Table 19 pin definition (19 pins) + footprint/block/schematic images
+
+Vendor-format differences vs Skyworks SKY13473 the LLM must handle:
+0x-prefixed addresses (vs bare hex), one register per RF port (vs one
+Register_0 for all throws), multi-row bit descriptions that Docling
+sometimes splits/duplicates (Table 15 PM_TRIG D5/D4, Table 17 rows),
+hyphenation artefacts ("Re- served", "receivedwith").

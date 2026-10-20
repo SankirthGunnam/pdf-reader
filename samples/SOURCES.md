@@ -6,3 +6,4 @@
 | skyworks_sky13473_rffe.pdf | SKY13473-569LF | SP10T antenna switch, MIPI RFFE | skyworksinc.com |
 | ti_lm555.pdf | LM555 | Timer (TI) | ti.com |
 | esp32.pdf | ESP32 | Wi-Fi/BT SoC (Espressif) | documentation.espressif.com |
+| infineon_bgsx44mu18.pdf | BGSX44MU18 | 4P4T antenna cross switch, MIPI RFFE 2.1 (Infineon) | infineon.com |
