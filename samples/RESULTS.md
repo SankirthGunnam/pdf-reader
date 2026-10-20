@@ -11,7 +11,7 @@
 Speed: ~10 s/page without OCR, ~18 s/page with OCR on this machine.
 Native-text datasheets (most vendor PDFs) should use `--no-ocr`.
 
-## Proof for the RF use-case (SKY13473, `output/skyworks_sky13473_rffe/rf_config.json`)
+## Proof for the RF use-case (SKY13473, from Docling Table 11/12 in docling.md — stage-2 extractor since removed, local LLM does this now)
 
 ANT -> TRX routing from Register_0 truth table (Table 11), computed from D7..D0 bits:
 

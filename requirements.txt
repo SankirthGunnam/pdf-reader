@@ -1,7 +1,6 @@
 # CPU-only torch first (saves ~3 GB vs default CUDA wheels):
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 docling>=2.40,<3
-pydantic>=2.7
 # OCR choice matters offline: RapidOCR ships ONNX models with the wheel.
 # EasyOCR downloads weights on first run (breaks offline); Tesseract needs
 # a system binary install in the office. Prefer RapidOCR to start.

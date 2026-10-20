@@ -15,7 +15,7 @@ def main(pdf: str, do_ocr: bool = True, post: bool = True, scale: float = 3.0) -
     opts = PdfPipelineOptions(artifacts_path=ROOT / "models" / "docling")
     opts.do_ocr = do_ocr               # --no-ocr: much faster for native-text PDFs
     opts.do_table_structure = True     # TableFormer: register/truth tables
-    opts.generate_picture_images = True  # crops for pin/block diagrams (stage-2 VLM)
+    opts.generate_picture_images = True  # crops for pin/block diagrams (for your local LLM)
     conv = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)})
 
     doc = conv.convert(pdf).document
